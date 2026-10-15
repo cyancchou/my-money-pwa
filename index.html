@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f4ed">
+  <meta name="description" content="奶油白極簡風個人理財與每月存錢規劃工具">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+  <title>我的理財日記</title>
+</head>
+<body>
+  <main class="app-shell">
+    <header class="app-header">
+      <div class="brand-icon" aria-hidden="true">✳</div>
+      <div>
+        <h1>我的理財日記</h1>
+        <p>MY MONEY · MY FUTURE</p>
+      </div>
+      <span class="local-badge">個人版</span>
+    </header>
+
+    <section class="month-card card">
+      <p class="eyebrow">目前查看的預算月份</p>
+      <div class="month-nav">
+        <button id="prevMonth" class="button button-outline" aria-label="上個月">‹ <span>上個月</span></button>
+        <div class="month-display">
+          <div id="monthYear">2026 年</div>
+          <strong id="monthNumber">10 月</strong>
+        </div>
+        <button id="nextMonth" class="button button-outline" aria-label="下個月"><span>下個月</span> ›</button>
+      </div>
+      <button id="thisMonth" class="button button-quiet">回到本月</button>
+    </section>
+
+    <section class="summary-grid" aria-label="財務摘要">
+      <article class="summary-card card"><span class="summary-icon">▤</span><p>存款＋緊急金</p><strong id="summarySavings">$6,000</strong></article>
+      <article class="summary-card card"><span class="summary-icon">☆</span><p>未來目標基金</p><strong id="summaryGoals">$1,250</strong></article>
+      <article class="summary-card card"><span class="summary-icon">↗</span><p>投資預算</p><strong id="summaryInvest">$1,000</strong></article>
+      <article class="summary-card card"><span class="summary-icon">♡</span><p>私人生活費</p><strong id="summaryPersonal">$4,000</strong></article>
+    </section>
+
+    <section class="card section-card">
+      <div class="section-heading"><h2>本月薪水</h2><span class="eyebrow">TWD · 新台幣</span></div>
+      <label for="salary">實際薪水（元）</label>
+      <div class="money-input"><span>$</span><input id="salary" type="number" min="0" step="1" inputmode="numeric" value="14250"></div>
+      <div class="toggle-row">
+        <div><strong>自訂每一項金額</strong><p>關閉時，依照預設比例自動分配</p></div>
+        <label class="switch"><input type="checkbox" id="customMode"><span></span></label>
+      </div>
+      <p id="allocationHint" class="hint">預設分配會隨薪水按比例調整，總額與薪水一致。</p>
+    </section>
+
+    <section class="card section-card">
+      <div class="section-heading"><h2>每月存錢進度</h2><span id="progressPercent" class="progress-percent">0%</span></div>
+      <div class="progress-meta"><span>本月已存入／投入</span><strong id="progressNumbers">$0 / $8,250</strong></div>
+      <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
+      <label for="savedAmount">已存入／投入的金額（元）</label>
+      <input id="savedAmount" class="plain-input" type="number" min="0" step="1" inputmode="numeric" value="0">
+      <p id="progressRemaining" class="hint">距離本月目標還差 $8,250。</p>
+    </section>
+
+    <section class="budget-section">
+      <div class="section-heading"><h2>預算分配</h2><span id="categoryCount" class="eyebrow">7 個項目</span></div>
+      <div id="budgetList" class="budget-list"></div>
+    </section>
+
+    <section class="card total-card">
+      <div class="total-row"><span>分配總額</span><strong id="allocatedTotal">$14,250</strong></div>
+      <div class="total-row muted"><span>薪水尚未分配</span><strong id="unallocated">$0</strong></div>
+      <p id="balanceMessage" class="hint">預算總額與薪水一致。</p>
+    </section>
+
+    <section class="card section-card">
+      <div class="section-heading"><h2>本月備註</h2><span class="eyebrow">OPTIONAL</span></div>
+      <textarea id="notes" rows="3" placeholder="例如：這個月想少買衣服、為演唱會存錢……"></textarea>
+      <p class="hint">資料會自動儲存在這台裝置的瀏覽器中。</p>
+    </section>
+
+    <footer>
+      <p>MY MONEY PLANNER</p>
+      <span>慢慢存，也好好生活。</span>
+      <button id="exportData" class="button button-outline export-button">匯出備份 JSON</button>
+      <label class="button button-outline import-button" for="importFile">匯入備份 JSON</label>
+      <input id="importFile" type="file" accept="application/json,.json" hidden>
+      <p class="privacy-note">僅儲存在本機瀏覽器；清除網站資料或更換裝置前，請先匯出備份。</p>
+    </footer>
+  </main>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>

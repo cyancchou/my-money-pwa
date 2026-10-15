@@ -1,0 +1,27 @@
+{
+  "id": "./",
+  "name": "我的理財日記",
+  "short_name": "理財日記",
+  "description": "奶油白極簡風個人理財與每月存錢規劃工具",
+  "lang": "zh-Hant",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f7f4ed",
+  "theme_color": "#f7f4ed",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
