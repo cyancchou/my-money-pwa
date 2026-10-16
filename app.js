@@ -1,243 +1,53 @@
 (() => {
   "use strict";
+  // Keep the original key so existing monthly data remains available after updating.
   const STORAGE_KEY = "my-money-planner-v1";
-  const defaults = [
+  const baseCategories = [
     { id: "longTerm", name: "長期存款", amount: 3000, icon: "▤", desc: "長期累積，盡量不動用", savings: true },
     { id: "bank", name: "額外銀行存款", amount: 2000, icon: "▥", desc: "額外存入銀行", savings: true },
-    { id: "investment", name: "投資", amount: 1000, icon: "↗", desc: "投資預算，依自己的計畫投入", savings: true },
+    { id: "investment", name: "投資", amount: 1000, icon: "↗", desc: "依自己的計畫投入", savings: true },
     { id: "personal", name: "私人生活費", amount: 4000, icon: "♡", desc: "約會、購物、娛樂", savings: false },
     { id: "emergency", name: "緊急預備金", amount: 1000, icon: "◇", desc: "應付突發必要支出", savings: true },
     { id: "goals", name: "未來目標基金", amount: 1250, icon: "☆", desc: "旅遊、演唱會、相機", savings: true },
     { id: "living", name: "補生活費", amount: 2000, icon: "⌂", desc: "轉入日常生活費帳戶", savings: false }
   ];
-  const $ = (id) => document.getElementById(id);
-  const els = {
-    prev: $("prevMonth"), next: $("nextMonth"), thisMonth: $("thisMonth"),
-    monthYear: $("monthYear"), monthNumber: $("monthNumber"), salary: $("salary"),
-    customMode: $("customMode"), allocationHint: $("allocationHint"),
-    savedAmount: $("savedAmount"), progressPercent: $("progressPercent"),
-    progressNumbers: $("progressNumbers"), progressBar: $("progressBar"),
-    progressRemaining: $("progressRemaining"), budgetList: $("budgetList"),
-    summarySavings: $("summarySavings"), summaryGoals: $("summaryGoals"),
-    summaryInvest: $("summaryInvest"), summaryPersonal: $("summaryPersonal"),
-    allocatedTotal: $("allocatedTotal"), unallocated: $("unallocated"),
-    balanceMessage: $("balanceMessage"), notes: $("notes"), toast: $("toast"),
-    exportData: $("exportData"), importFile: $("importFile")
-  };
+  const expenseCategories = ["餐飲", "交通", "購物", "娛樂", "生活用品", "其他"];
+  const $ = id => document.getElementById(id);
+  const els = Object.fromEntries(["prevMonth nextMonth thisMonth monthYear monthNumber salary customMode allocationHint savedAmount progressPercent progressNumbers progressBar progressRemaining budgetList summarySavings summaryGoals summaryInvest summaryPersonal allocatedTotal unallocated balanceMessage notes toast exportData importFile monthlySavedTotal weeklyBudget weeklyHint goalName goalTarget goalCurrent goalBar goalHint expenseName expenseAmount expenseCategory addExpense expenseTotal expenseList expenseChart categoryEditor newCategoryName newCategoryAmount newCategorySavings addCategory"].split(" ").map(id => [id, $(id)]));
   let db = loadDB();
   let month = currentMonthKey();
   let toastTimer;
-
-  function currentMonthKey() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  function currentMonthKey(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;}
+  function money(n){return "$"+Math.round(Number(n)||0).toLocaleString("en-US");}
+  function loadDB(){try{const raw=localStorage.getItem(STORAGE_KEY);if(raw){const p=JSON.parse(raw);if(p&&p.months&&typeof p.months==="object")return p;}}catch(e){console.warn(e);}return {version:2,months:{}};}
+  function persist(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(db));return true;}catch(e){toast("儲存失敗，請匯出備份並檢查裝置空間。");return false;}}
+  function defaultsFor(data){return Array.isArray(data.categories)&&data.categories.length?data.categories:baseCategories.map(c=>({...c}));}
+  function initialMonth(){return {salary:14250,customMode:false,amounts:Object.fromEntries(baseCategories.map(c=>[c.id,c.amount])),categories:baseCategories.map(c=>({...c})),savedAmount:0,notes:"",weeklyBudget:0,goalName:"",goalTarget:0,goalCurrent:0,expenses:[]};}
+  function getData(){if(!db.months[month])db.months[month]=initialMonth();const d=db.months[month];if(!d.amounts)d.amounts=Object.fromEntries(baseCategories.map(c=>[c.id,c.amount]));if(!Array.isArray(d.categories))d.categories=baseCategories.map(c=>({...c}));baseCategories.forEach(c=>{if(!Number.isFinite(Number(d.amounts[c.id])))d.amounts[c.id]=c.amount;});if(!Number.isFinite(Number(d.salary)))d.salary=14250;if(!Number.isFinite(Number(d.savedAmount)))d.savedAmount=0;if(typeof d.notes!=="string")d.notes="";if(!Array.isArray(d.expenses))d.expenses=[];["weeklyBudget","goalTarget","goalCurrent"].forEach(k=>{if(!Number.isFinite(Number(d[k])))d[k]=0;});if(typeof d.goalName!=="string")d.goalName="";return d;}
+  function allocate(d){const cats=defaultsFor(d),salary=Math.max(0,Math.round(Number(d.salary)||0));if(d.customMode)return Object.fromEntries(cats.map(c=>[c.id,Math.max(0,Math.round(Number(d.amounts[c.id]??c.amount)||0))]));const sum=cats.reduce((s,c)=>s+Math.max(0,Number(c.amount)||0),0)||1;let used=0;const out={};cats.forEach((c,i)=>{const n=i===cats.length-1?salary-used:Math.round(salary*Math.max(0,Number(c.amount)||0)/sum);out[c.id]=n;used+=n;});return out;}
+  function toast(msg){els.toast.textContent=msg;els.toast.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>els.toast.classList.remove("show"),2400);}
+  function node(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;}
+  function render(){const d=getData(),cats=defaultsFor(d),amounts=allocate(d),salary=Math.max(0,Number(d.salary)||0),total=Object.values(amounts).reduce((s,n)=>s+n,0),get=id=>Number(amounts[id])||0;
+    const [y,m]=month.split("-").map(Number);els.monthYear.textContent=`${y} 年`;els.monthNumber.textContent=`${m} 月`;els.salary.value=d.salary;els.customMode.checked=!!d.customMode;els.savedAmount.value=d.savedAmount;els.notes.value=d.notes;
+    els.summarySavings.textContent=money(cats.reduce((s,c)=>s+(c.savings?get(c.id):0),0));els.summaryGoals.textContent=money(get("goals"));els.summaryInvest.textContent=money(get("investment"));els.summaryPersonal.textContent=money(get("personal"));
+    const plannedSaved=cats.reduce((s,c)=>s+(c.savings?get(c.id):0),0);els.monthlySavedTotal.textContent=money(plannedSaved);
+    els.allocatedTotal.textContent=money(total);const diff=salary-total;els.unallocated.textContent=money(diff);els.balanceMessage.textContent=diff===0?"預算總額與薪水一致。":diff>0?`還有 ${money(diff)} 尚未分配。`:`預算超出薪水 ${money(-diff)}，請調整金額。`;els.allocationHint.textContent=d.customMode?"自訂模式：可修改各分類金額，並確認總額不超過薪水。":"依各分類比例自動分配薪水。";
+    const saved=Math.max(0,Number(d.savedAmount)||0),pct=plannedSaved?Math.min(100,Math.round(saved/plannedSaved*100)):0;els.progressPercent.textContent=pct+"%";els.progressNumbers.textContent=`${money(saved)} / ${money(plannedSaved)}`;els.progressBar.style.width=pct+"%";els.progressRemaining.textContent=saved>=plannedSaved?"本月存錢目標已達成！":`距離本月規劃存錢總額還差 ${money(plannedSaved-saved)}。`;
+    els.budgetList.innerHTML="";cats.forEach(c=>{const amount=get(c.id),card=node("article","budget-item card"),main=node("div","budget-main"),icon=node("div","category-icon",c.icon||"◇"),txt=node("div","category-text"),title=node("strong", "", c.name),desc=node("small","",c.desc|| (c.savings?"計入存錢總額":"一般預算")),box=node("div","category-amount");txt.append(title,desc);if(d.customMode){const inp=node("input");inp.type="number";inp.min="0";inp.inputMode="numeric";inp.value=amount;inp.setAttribute("aria-label",c.name+"預算");inp.addEventListener("change",()=>{getData().amounts[c.id]=Math.max(0,Math.round(Number(inp.value)||0));persist();render();});box.append(inp);}else{box.append(node("strong","",money(amount)),node("small","",`${salary?(amount/salary*100).toFixed(1):"0.0"}%`));}main.append(icon,txt,box);const track=node("div","item-track"),bar=node("div","item-bar");bar.style.width=(salary?Math.min(100,amount/salary*100):0)+"%";track.append(bar);card.append(main,track);els.budgetList.append(card);});
+    els.weeklyBudget.value=d.weeklyBudget||"";els.weeklyHint.textContent=d.weeklyBudget?`每週預算 ${money(d.weeklyBudget)}；記得依實際生活彈性調整。`:"設定每週可花費金額，幫自己掌握生活費。";
+    els.goalName.value=d.goalName;els.goalTarget.value=d.goalTarget||"";els.goalCurrent.value=d.goalCurrent||"";const gp=d.goalTarget?Math.min(100,Math.round(d.goalCurrent/d.goalTarget*100)):0;els.goalBar.style.width=gp+"%";els.goalHint.textContent=d.goalName?(d.goalTarget?`${d.goalName}：已存 ${money(d.goalCurrent)} / ${money(d.goalTarget)}（${gp}%），${d.goalCurrent>=d.goalTarget?"目標達成！":`還差 ${money(d.goalTarget-d.goalCurrent)}`}。`:`${d.goalName}：請設定目標金額。`):"設定一個想完成的目標吧。";
+    els.expenseTotal.textContent=money(d.expenses.reduce((s,x)=>s+Number(x.amount||0),0));els.expenseList.innerHTML="";d.expenses.forEach((x,i)=>{const row=node("div","expense-row"),info=node("div","expense-info"),name=node("strong","",x.name),meta=node("small","",x.category),amt=node("strong","expense-amount",money(x.amount)),del=node("button","delete-button","刪除");info.append(name,meta);del.type="button";del.addEventListener("click",()=>{getData().expenses.splice(i,1);persist();render();});row.append(info,amt,del);els.expenseList.append(row);});
+    const groups={};d.expenses.forEach(x=>groups[x.category]=(groups[x.category]||0)+Number(x.amount||0));const entries=Object.entries(groups).sort((a,b)=>b[1]-a[1]);els.expenseChart.innerHTML="";const expenseSum=entries.reduce((s,x)=>s+x[1],0);if(!entries.length){els.expenseChart.append(node("p","hint","新增支出後，這裡會顯示分類分析。"));}else entries.forEach(([cat,val])=>{const row=node("div","chart-row"),top=node("div","chart-top"),label=node("span","",cat),value=node("strong","",`${money(val)} · ${Math.round(val/expenseSum*100)}%`),track=node("div","chart-track"),bar=node("div","chart-bar");top.append(label,value);bar.style.width=(val/expenseSum*100)+"%";track.append(bar);row.append(top,track);els.expenseChart.append(row);});
+    els.categoryEditor.innerHTML="";cats.forEach((c,i)=>{const row=node("div","editor-row"),name=node("input","plain-input"),amount=node("input","plain-input"),savingsLabel=node("label","editor-check"),savings=node("input"),del=node("button","delete-button","刪除");name.value=c.name;name.setAttribute("aria-label","分類名稱");amount.type="number";amount.min="0";amount.inputMode="numeric";amount.value=d.customMode?(d.amounts[c.id]??c.amount):c.amount;amount.setAttribute("aria-label","分類金額");savings.type="checkbox";savings.checked=!!c.savings;savingsLabel.append(savings,document.createTextNode("計入存錢"));name.addEventListener("change",()=>{c.name=name.value.trim()||"未命名分類";persist();render();});amount.addEventListener("change",()=>{const val=Math.max(0,Math.round(Number(amount.value)||0));c.amount=val;d.amounts[c.id]=val;d.customMode=true;persist();render();});savings.addEventListener("change",()=>{c.savings=savings.checked;persist();render();});del.addEventListener("click",()=>{if(cats.length===1){toast("至少要保留一個分類");return;}if(confirm(`確定刪除「${c.name}」？`)){d.categories=cats.filter(x=>x.id!==c.id);delete d.amounts[c.id];persist();render();}});row.append(name,amount,savingsLabel,del);els.categoryEditor.append(row);});
   }
-  function formatMoney(n) {
-    return "$" + Math.round(Number(n) || 0).toLocaleString("en-US");
-  }
-  function loadDB() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && parsed.months && typeof parsed.months === "object") return parsed;
-      }
-    } catch (e) { console.warn("Could not load saved data", e); }
-    return { version: 1, months: {} };
-  }
-  function persist() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-      return true;
-    } catch (e) {
-      showToast("無法儲存，請檢查瀏覽器儲存空間");
-      return false;
-    }
-  }
-  function initialMonth() {
-    return {
-      salary: 14250,
-      customMode: false,
-      amounts: Object.fromEntries(defaults.map(c => [c.id, c.amount])),
-      savedAmount: 0,
-      notes: ""
-    };
-  }
-  function getMonthData() {
-    if (!db.months[month]) db.months[month] = initialMonth();
-    const data = db.months[month];
-    if (!data.amounts) data.amounts = Object.fromEntries(defaults.map(c => [c.id, c.amount]));
-    defaults.forEach(c => { if (!Number.isFinite(Number(data.amounts[c.id]))) data.amounts[c.id] = c.amount; });
-    if (!Number.isFinite(Number(data.salary))) data.salary = 14250;
-    if (!Number.isFinite(Number(data.savedAmount))) data.savedAmount = 0;
-    if (typeof data.notes !== "string") data.notes = "";
-    return data;
-  }
-  function saveCurrentField(field, value) {
-    const data = getMonthData();
-    data[field] = value;
-    persist();
-  }
-  function allocate(data) {
-    const salary = Math.max(0, Math.round(Number(data.salary) || 0));
-    if (data.customMode) return Object.fromEntries(defaults.map(c => [c.id, Math.max(0, Math.round(Number(data.amounts[c.id]) || 0))]));
-    const totalBase = defaults.reduce((sum, c) => sum + c.amount, 0);
-    let used = 0;
-    const amounts = {};
-    defaults.forEach((c, i) => {
-      const amount = i === defaults.length - 1 ? salary - used : Math.round(salary * c.amount / totalBase);
-      amounts[c.id] = amount;
-      used += amount;
-    });
-    return amounts;
-  }
-  function render() {
-    const data = getMonthData();
-    const [year, mm] = month.split("-").map(Number);
-    els.monthYear.textContent = `${year} 年`;
-    els.monthNumber.textContent = `${mm} 月`;
-    els.salary.value = data.salary;
-    els.customMode.checked = !!data.customMode;
-    els.savedAmount.value = data.savedAmount;
-    els.notes.value = data.notes;
-    const amounts = allocate(data);
-    const total = Object.values(amounts).reduce((sum, n) => sum + n, 0);
-    const salary = Math.max(0, Math.round(Number(data.salary) || 0));
-    const get = id => amounts[id] || 0;
-    els.summarySavings.textContent = formatMoney(get("longTerm") + get("bank") + get("emergency"));
-    els.summaryGoals.textContent = formatMoney(get("goals"));
-    els.summaryInvest.textContent = formatMoney(get("investment"));
-    els.summaryPersonal.textContent = formatMoney(get("personal"));
-    els.allocatedTotal.textContent = formatMoney(total);
-    const difference = salary - total;
-    els.unallocated.textContent = formatMoney(difference);
-    els.unallocated.style.color = difference === 0 ? "var(--green-dark)" : "#9b694a";
-    els.balanceMessage.textContent = difference === 0 ? "預算總額與薪水一致。" : difference > 0 ? `還有 ${formatMoney(difference)} 尚未分配。` : `預算超出薪水 ${formatMoney(Math.abs(difference))}，請調整金額。`;
-    els.allocationHint.textContent = data.customMode ? "目前為自訂模式，請確認分配總額與薪水一致。" : "預設分配會依薪水按比例換算，總額與薪水一致。";
-    const goal = get("longTerm") + get("bank") + get("investment") + get("emergency") + get("goals");
-    const saved = Math.max(0, Number(data.savedAmount) || 0);
-    const progress = goal > 0 ? Math.min(100, Math.round(saved / goal * 100)) : 0;
-    els.progressPercent.textContent = `${progress}%`;
-    els.progressNumbers.textContent = `${formatMoney(saved)} / ${formatMoney(goal)}`;
-    els.progressBar.style.width = `${progress}%`;
-    els.progressRemaining.textContent = saved >= goal ? "本月目標已達成，做得好！" : `距離本月目標還差 ${formatMoney(goal - saved)}。`;
-    els.budgetList.innerHTML = "";
-    defaults.forEach(c => {
-      const amount = get(c.id);
-      const pct = salary > 0 ? Math.min(100, amount / salary * 100) : 0;
-      const card = document.createElement("article");
-      card.className = "budget-item card";
-      const main = document.createElement("div");
-      main.className = "budget-main";
-      const icon = document.createElement("div");
-      icon.className = "category-icon";
-      icon.textContent = c.icon;
-      const text = document.createElement("div");
-      text.className = "category-text";
-      const title = document.createElement("strong");
-      title.textContent = c.name;
-      const desc = document.createElement("small");
-      desc.textContent = c.desc;
-      text.append(title, desc);
-      const amountBox = document.createElement("div");
-      amountBox.className = "category-amount";
-      if (data.customMode) {
-        const input = document.createElement("input");
-        input.type = "number";
-        input.min = "0";
-        input.step = "1";
-        input.inputMode = "numeric";
-        input.setAttribute("aria-label", c.name + "預算金額");
-        input.value = amount;
-        input.addEventListener("change", () => {
-          const current = getMonthData();
-          current.amounts[c.id] = Math.max(0, Math.round(Number(input.value) || 0));
-          persist(); render();
-        });
-        amountBox.appendChild(input);
-      } else {
-        const strong = document.createElement("strong");
-        strong.textContent = formatMoney(amount);
-        const small = document.createElement("small");
-        small.textContent = `${salary > 0 ? (amount / salary * 100).toFixed(1) : "0.0"}%`;
-        amountBox.append(strong, small);
-      }
-      main.append(icon, text, amountBox);
-      const track = document.createElement("div");
-      track.className = "item-track";
-      const bar = document.createElement("div");
-      bar.className = "item-bar";
-      bar.style.width = `${pct}%`;
-      track.appendChild(bar);
-      card.append(main, track);
-      els.budgetList.appendChild(card);
-    });
-  }
-  function changeMonth(delta) {
-    const [year, mm] = month.split("-").map(Number);
-    const d = new Date(year, mm - 1 + delta, 1);
-    month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    render();
-  }
-  function showToast(message) {
-    els.toast.textContent = message;
-    els.toast.classList.add("show");
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => els.toast.classList.remove("show"), 2300);
-  }
-  els.prev.addEventListener("click", () => changeMonth(-1));
-  els.next.addEventListener("click", () => changeMonth(1));
-  els.thisMonth.addEventListener("click", () => { month = currentMonthKey(); render(); });
-  els.salary.addEventListener("change", () => {
-    const data = getMonthData();
-    data.salary = Math.max(0, Math.round(Number(els.salary.value) || 0));
-    persist(); render();
-  });
-  els.customMode.addEventListener("change", () => {
-    const data = getMonthData();
-    if (els.customMode.checked && !data.customMode) data.amounts = allocate(data);
-    data.customMode = els.customMode.checked;
-    persist(); render();
-  });
-  els.savedAmount.addEventListener("change", () => {
-    saveCurrentField("savedAmount", Math.max(0, Math.round(Number(els.savedAmount.value) || 0)));
-    render();
-  });
-  els.notes.addEventListener("input", () => {
-    const data = getMonthData();
-    data.notes = els.notes.value;
-    persist();
-  });
-  els.exportData.addEventListener("click", () => {
-    const blob = new Blob([JSON.stringify(db, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "my-money-planner-backup.json";
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast("已匯出備份檔");
-  });
-  els.importFile.addEventListener("change", async () => {
-    const file = els.importFile.files && els.importFile.files[0];
-    if (!file) return;
-    try {
-      const parsed = JSON.parse(await file.text());
-      if (!parsed || !parsed.months || typeof parsed.months !== "object") throw new Error("invalid");
-      if (!confirm("匯入備份會取代目前這個 App 的所有本機資料。確定要繼續嗎？")) return;
-      db = parsed; persist(); render(); showToast("備份匯入成功");
-    } catch (e) { showToast("檔案格式不正確，無法匯入"); }
-    finally { els.importFile.value = ""; }
-  });
-
-  if ("serviceWorker" in navigator && location.protocol !== "file:") {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js").catch(err => console.warn("Service worker registration failed", err));
-    });
-  }
-  if (!db.months[month]) {
-    db.months[month] = initialMonth();
-    persist();
-  }
-  render();
+  function changeMonth(delta){const [y,m]=month.split("-").map(Number),d=new Date(y,m-1+delta,1);month=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;render();}
+  els.prev.addEventListener("click",()=>changeMonth(-1));els.next.addEventListener("click",()=>changeMonth(1));els.thisMonth.addEventListener("click",()=>{month=currentMonthKey();render();});
+  els.salary.addEventListener("change",()=>{getData().salary=Math.max(0,Math.round(Number(els.salary.value)||0));persist();render();});els.customMode.addEventListener("change",()=>{const d=getData();if(els.customMode.checked&&!d.customMode)d.amounts=allocate(d);d.customMode=els.customMode.checked;persist();render();});els.savedAmount.addEventListener("change",()=>{getData().savedAmount=Math.max(0,Math.round(Number(els.savedAmount.value)||0));persist();render();});els.notes.addEventListener("input",()=>{getData().notes=els.notes.value;persist();});
+  els.weeklyBudget.addEventListener("change",()=>{getData().weeklyBudget=Math.max(0,Math.round(Number(els.weeklyBudget.value)||0));persist();render();});["goalName","goalTarget","goalCurrent"].forEach(k=>{const el=els[k];el.addEventListener("change",()=>{const d=getData();d[k]=k==="goalName"?el.value:Math.max(0,Math.round(Number(el.value)||0));persist();render();});});
+  els.addExpense.addEventListener("click",()=>{const name=els.expenseName.value.trim(),amount=Math.max(0,Math.round(Number(els.expenseAmount.value)||0));if(!name||!amount){toast("請填寫支出項目和大於 0 的金額");return;}getData().expenses.push({name,amount,category:els.expenseCategory.value,date:new Date().toISOString().slice(0,10)});els.expenseName.value="";els.expenseAmount.value="";persist();render();toast("已新增支出");});
+  els.addCategory.addEventListener("click",()=>{const name=els.newCategoryName.value.trim(),amount=Math.max(0,Math.round(Number(els.newCategoryAmount.value)||0));if(!name){toast("請輸入分類名稱");return;}const d=getData(),id="custom_"+Date.now();d.categories=defaultsFor(d);d.categories.push({id,name,amount,icon:"◇",desc:"自訂分類",savings:els.newCategorySavings.checked});d.amounts[id]=amount;d.customMode=true;els.newCategoryName.value="";els.newCategoryAmount.value="";els.newCategorySavings.checked=false;persist();render();toast("已新增分類");});
+  els.exportData.addEventListener("click",()=>{const blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="my-money-planner-backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast("已匯出備份檔");});
+  els.importFile.addEventListener("change",async()=>{const file=els.importFile.files&&els.importFile.files[0];if(!file)return;try{const parsed=JSON.parse(await file.text());if(!parsed||!parsed.months||typeof parsed.months!=="object")throw Error("invalid");if(!confirm("匯入備份會取代目前這個 App 的所有本機資料。確定要繼續嗎？"))return;db=parsed;persist();render();toast("備份匯入成功");}catch(e){toast("檔案格式不正確，無法匯入");}finally{els.importFile.value="";}});
+  if("serviceWorker" in navigator&&location.protocol!=="file:")window.addEventListener("load",()=>navigator.serviceWorker.register("./service-worker.js").catch(console.warn));
+  if(!db.months[month]){db.months[month]=initialMonth();persist();}render();
 })();
